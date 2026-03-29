@@ -1,0 +1,33 @@
+package com.ecommerce.ecommercebackend.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class VerificationToken {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String token;
+
+    @Column(name = "new_email" )
+    private String newEmail;
+
+    @OneToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "id", nullable = false, unique = true)
+    private Users user;
+
+
+    private LocalDateTime expiryDate;
+
+    private boolean used = false;
+}
+
