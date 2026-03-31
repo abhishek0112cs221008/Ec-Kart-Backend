@@ -8,9 +8,18 @@ import com.ecommerce.ecommercebackend.auth.exception.*;
 import com.ecommerce.ecommercebackend.entity.*;
 import com.ecommerce.ecommercebackend.exception.*;
 import com.ecommerce.ecommercebackend.auth.service.AuthService;
-import com.ecommerce.ecommercebackend.repository.*;
+import com.ecommerce.ecommercebackend.seller.entity.SellerRequest;
+import com.ecommerce.ecommercebackend.seller.entity.SellerRequestStatus;
+import com.ecommerce.ecommercebackend.seller.repository.SellerRequestRepo;
+import com.ecommerce.ecommercebackend.repository.UsersRepo;
+import com.ecommerce.ecommercebackend.repository.VerificationTokenRepo;
+import com.ecommerce.ecommercebackend.repository.OTPRepository;
+import com.ecommerce.ecommercebackend.repository.PasswordResetAttemptRepository;
 import com.ecommerce.ecommercebackend.util.EmailService;
 import jakarta.transaction.Transactional;
+
+
+
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -56,6 +65,7 @@ public class AuthServiceImpl implements AuthService {
     private final Cloudinary cloudinary;
     private final OTPRepository otpRepository;
     private final PasswordResetAttemptRepository attemptRepo;
+    private final SellerRequestRepo sellerRequestRepo;
 
 
 
@@ -122,16 +132,34 @@ public class AuthServiceImpl implements AuthService {
     verificationToken.setExpiryDate(LocalDateTime.now().plusHours(24));
     verificationTokenRepo.save(verificationToken);
 
+    // If registering as a SELLER, also create a SellerRequest so they appear in Admin Dashboard
+    if (userRole == Role.ROLE_SELLER) {
+        SellerRequest sellerRequest = SellerRequest.builder()
+                .user(user)
+                .storeName(user.getFirstName() + "'s Store") // Default name from user's first name
+                .status(SellerRequestStatus.PENDING)
+                .createdAt(LocalDateTime.now())
+                .build();
+        sellerRequestRepo.save(sellerRequest);
+    }
+
 
     // send verification email (change the URL depending on your deployment(frontend(3000) or backend(8080)) )
     String verificationLink = "http://localhost:8080/api/v1/auth/verify-email?token=" + token;
     String body = "Hello " + user.getFirstName() + ",\n\n" +
             "Click the link to verify your account:\n" + verificationLink +
             "\n\nIf you did not register, ignore this email.";
-    emailService.sendEmail(user.getEmail(), "Verify your account", body);
+
+    try {
+        emailService.sendEmail(user.getEmail(), "Verify your account", body);
+    } catch (Exception e) {
+        System.err.println("Email could not be sent: " + e.getMessage());
+        // We still return success because user and seller request are already saved
+    }
 
     return new RegisterResponse("User registered. Please check your email for verification." ,token);
 }
+
 
 
 
@@ -201,15 +229,18 @@ public class AuthServiceImpl implements AuthService {
         String token = jwtService.generateToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
 
-        return new LoginResponse (
-            "Login successful",
-                token, refreshToken,
-            user.getEmail(),
-            user.getFirstName(),
-            user.getLastName(),
-            user.getProfileImageUrl(),
-            user.getRole()
-        );
+        return LoginResponse.builder()
+                .id(user.getId())
+                .message("Login successful")
+                .accessToken(token)
+                .refreshToken(refreshToken)
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .profileImageUrl(user.getProfileImageUrl())
+                .role(user.getRole())
+                .sellerVerified(user.isSellerVerified())
+                .build();
     }
 
 
@@ -248,16 +279,18 @@ public class AuthServiceImpl implements AuthService {
         // Generate a NEW access token
         String newAccessToken = jwtService.generateToken(user);
 
-        return new LoginResponse(
-                "Token refreshed successfully",
-                newAccessToken,
-                refreshTokenReq.getToken(), // reuse same refresh token
-                user.getEmail(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getProfileImageUrl(),
-                user.getRole()
-        );
+        return LoginResponse.builder()
+                .id(user.getId())
+                .message("Token refreshed successfully")
+                .accessToken(newAccessToken)
+                .refreshToken(refreshTokenReq.getToken())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .profileImageUrl(user.getProfileImageUrl())
+                .role(user.getRole())
+                .sellerVerified(user.isSellerVerified())
+                .build();
     }
 
 
@@ -325,14 +358,14 @@ public class AuthServiceImpl implements AuthService {
      * @throws IOException if image upload fails
      */
     @Override
-    public UpdateProfileResponse updateProfile(String userEmail, String firstName, String lastName, MultipartFile file) throws IOException {
-
+    @Transactional
+    public UpdateProfileResponse updateProfile(String userEmail, String firstName, String lastName, String phoneNumber, MultipartFile file) throws IOException {
         Users user = usersRepo.findByEmail(userEmail)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + userEmail));
 
-        // Update special fields only if present
         if (firstName != null) user.setFirstName(firstName);
         if (lastName != null) user.setLastName(lastName);
+        if (phoneNumber != null) user.setPhoneNumber(phoneNumber);
 
         // Upload a new profile photo
         if (file != null && !file.isEmpty()) {
@@ -350,12 +383,14 @@ public class AuthServiceImpl implements AuthService {
 
         usersRepo.save(user);
 
-        return new UpdateProfileResponse(
-                "Profile updated successfully",
-                user.getFirstName(),
-                user.getLastName(),
-                user.getProfileImageUrl()
-        );
+        return UpdateProfileResponse.builder()
+                .id(user.getId())
+                .message("Profile updated successfully")
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .profileImageUrl(user.getProfileImageUrl())
+                .phoneNumber(user.getPhoneNumber())
+                .build();
     }
 
 
@@ -372,13 +407,18 @@ public class AuthServiceImpl implements AuthService {
         Users user = usersRepo.findByEmail(email)
                 .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
 
-        return new GetProfileResponse(
-                user.getEmail(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getProfileImageUrl()
-        );
-    }
+        return GetProfileResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .profileImageUrl(user.getProfileImageUrl())
+                .role(user.getRole())
+                .sellerVerified(user.isSellerVerified())
+                .phoneNumber(user.getPhoneNumber())
+                .build();
+}
+
 
 
 

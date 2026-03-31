@@ -114,7 +114,7 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setExpiresAt(payment.getCreatedAt().plusMinutes(60)); // TTL = 60 minutes (after that the transaction will be canceled)
         paymentRepository.save(payment);
 
-        order.setStatus(OrderStatus.DELIVERED); // to avoid confusion (BE happy: D)
+        order.setStatus(OrderStatus.PENDING_PAYMENT); // Awaiting payment confirmation from Stripe
 
         return  PaymentCreateResponse.of(session.getId(), session.getUrl());
     }

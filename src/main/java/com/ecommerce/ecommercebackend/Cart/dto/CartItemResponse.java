@@ -15,4 +15,5 @@ public class CartItemResponse {
     private String productName;
     private BigDecimal price;
     private Integer quantity;
+    private String imageUrl;
 }

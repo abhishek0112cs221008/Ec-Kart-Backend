@@ -140,6 +140,7 @@ public class AuthController {
             Authentication authentication,
             @RequestParam(required = false) String firstName,
             @RequestParam(required = false) String lastName,
+            @RequestParam(required = false) String phoneNumber,
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws IOException {
 
@@ -149,6 +150,7 @@ public class AuthController {
                 TokenEmail,
                 firstName,
                 lastName,
+                phoneNumber,
                 file
         );
 

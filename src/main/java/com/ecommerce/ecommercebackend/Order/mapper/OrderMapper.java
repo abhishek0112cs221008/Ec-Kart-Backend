@@ -26,6 +26,9 @@ public final class OrderMapper {
         s.setTotalAmount(o.getTotalAmount());
         s.setStatus(o.getStatus());
         s.setCreatedAt(o.getCreatedAt());
+        s.setItemThumbnails(o.getItems().stream()
+                .map(i -> i.getProduct().getImageUrl())
+                .collect(Collectors.toList()));
         return s;
     }
 
@@ -36,6 +39,7 @@ public final class OrderMapper {
         d.setProductName(i.getProduct().getName());
         d.setQuantity(i.getQuantity());
         d.setPriceAtPurchase(i.getPriceAtPurchase());
+        d.setImageUrl(i.getProduct().getImageUrl());
         return d;
     }
 }

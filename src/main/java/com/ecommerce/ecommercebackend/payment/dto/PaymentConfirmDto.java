@@ -11,14 +11,15 @@ import lombok.*;
 @NoArgsConstructor
 @Builder
 public class PaymentConfirmDto {
+    private String status;
     private String message;
     private boolean paid;
 
     public static PaymentConfirmDto ok(String message) {
-        return new PaymentConfirmDto(message, true);
+        return new PaymentConfirmDto("OK", message, true);
     }
 
     public static PaymentConfirmDto pending(String message) {
-        return new PaymentConfirmDto(message, false);
+        return new PaymentConfirmDto("PENDING", message, false);
     }
 }

@@ -22,6 +22,10 @@ public class ProductResponse {
     private Boolean active;
     private String sellerName;
     private String sellerEmail;
+    private UUID sellerId;
+    private Double averageRating;
+    private Long reviewCount;
+    private Double sellerRating;
 
 
 }

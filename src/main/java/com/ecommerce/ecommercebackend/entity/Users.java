@@ -41,6 +41,11 @@ public class Users implements UserDetails {
     @Column(nullable = false)
     private Role role; // USER, ADMIN, SELLER
 
+    private String phoneNumber;
+
+    @Builder.Default
+    private boolean sellerVerified = false;
+
     private boolean enabled = false;
 
     @Column(name = "email_verified", nullable = false)

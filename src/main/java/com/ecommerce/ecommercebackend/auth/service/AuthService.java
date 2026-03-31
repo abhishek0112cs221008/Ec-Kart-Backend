@@ -17,7 +17,7 @@ public interface AuthService {
 
     LoginResponse login(SignInRequest signInRequest);
 
-    UpdateProfileResponse updateProfile(String userEmail, String firstName, String lastName,  MultipartFile file) throws IOException;
+    UpdateProfileResponse updateProfile(String userEmail, String firstName, String lastName, String phoneNumber, MultipartFile file) throws IOException;
 
     GetProfileResponse getUserProfile(String email);
 

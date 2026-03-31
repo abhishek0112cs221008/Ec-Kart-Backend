@@ -41,6 +41,7 @@ public class ProductServiceImpl implements ProductService {
      private final CategoryRepository categoryRepo;
      private final Cloudinary cloudinary;
      private final UsersRepo usersRepository;
+     private final com.ecommerce.ecommercebackend.Review.service.ReviewService reviewService;
 
 
 
@@ -299,6 +300,10 @@ public class ProductServiceImpl implements ProductService {
                 .imageUrl(p.getImageUrl())
                 .sellerName(p.getSeller().getFirstName() + " " + p.getSeller().getLastName())
                 .sellerEmail(p.getSeller().getEmail())
+                .sellerId(p.getSeller().getId())
+                .averageRating(reviewService.getAverageRating(p.getId()))
+                .reviewCount(reviewService.getReviewCount(p.getId()))
+                .sellerRating(reviewService.getSellerAverageRating(p.getSeller().getId()))
                 .build();
     }
 

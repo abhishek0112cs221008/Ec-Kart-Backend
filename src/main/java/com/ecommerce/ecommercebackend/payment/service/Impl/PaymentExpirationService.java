@@ -21,6 +21,7 @@ import java.util.List;
 public class PaymentExpirationService {
 
     private final PaymentRepository paymentRepository;
+    private final com.ecommerce.ecommercebackend.Order.service.OrderService orderService;
 
     @Value("${payment.session.ttl.minutes:60}")
     private long ttlMinutes;
@@ -54,6 +55,18 @@ public class PaymentExpirationService {
                 p.setStatus(Payment.Status.FAILED);
                 paymentRepository.save(p);
 
+                // Restore stock by cancelling the order
+                try {
+                    // We use "SYSTEM" or a placeholder email since this is an automated cleanup
+                    // But cancelOrder checks ownership via email. 
+                    // To bypass this, we might need a system-level cancel method or just 
+                    // manually restore stock here.
+                    // Given the current architecture, I'll manually restore stock to avoid email checks.
+                    restoreStockForOrder(p.getOrderId());
+                } catch (Exception e) {
+                    // log & continue
+                }
+
                 // OPTIONAL: cancel the PaymentIntent to avoid later use
                 if (session.getPaymentIntent() != null) {
                     try {
@@ -67,6 +80,14 @@ public class PaymentExpirationService {
             } catch (Exception ex) {
                 // log error and continue with next
             }
+        }
+    }
+
+    private void restoreStockForOrder(Long orderId) {
+        try {
+            orderService.cancelOrderSystem(orderId);
+        } catch (Exception e) {
+            // log error
         }
     }
 }

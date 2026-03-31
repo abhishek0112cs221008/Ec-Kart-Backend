@@ -20,23 +20,23 @@ Create a Postman collection called `Ecommerce Backend`.
 
 Create a Postman environment called `local-ecommerce` with these variables:
 
-| Variable | Example Value | Purpose |
-|---|---|---|
-| `baseUrl` | `http://localhost:8080` | Base API URL |
-| `accessToken` | empty | JWT access token |
-| `refreshToken` | empty | JWT refresh token |
-| `userEmail` | `user1@example.com` | Normal user email |
-| `userPassword` | `Password123!` | Normal user password |
-| `adminEmail` | `admin@example.com` | Admin email |
-| `adminPassword` | `Password123!` | Admin password |
-| `sellerEmail` | `seller@example.com` | Seller email |
-| `sellerPassword` | `Password123!` | Seller password |
-| `categoryId` | empty | Category ID created during testing |
-| `productId` | empty | Product UUID created during testing |
-| `orderId` | empty | Order ID created during testing |
-| `paymentSessionId` | empty | Stripe checkout session ID |
-| `emailVerificationToken` | empty | Token from register response |
-| `newEmailVerificationToken` | empty | Token from update-email flow |
+| Variable                      | Example Value             | Purpose                             |
+| ----------------------------- | ------------------------- | ----------------------------------- |
+| `baseUrl`                   | `http://localhost:8080` | Base API URL                        |
+| `accessToken`               | empty                     | JWT access token                    |
+| `refreshToken`              | empty                     | JWT refresh token                   |
+| `userEmail`                 | `user1@example.com`     | Normal user email                   |
+| `userPassword`              | `Password123!`          | Normal user password                |
+| `adminEmail`                | `admin@example.com`     | Admin email                         |
+| `adminPassword`             | `Password123!`          | Admin password                      |
+| `sellerEmail`               | `seller@example.com`    | Seller email                        |
+| `sellerPassword`            | `Password123!`          | Seller password                     |
+| `categoryId`                | empty                     | Category ID created during testing  |
+| `productId`                 | empty                     | Product UUID created during testing |
+| `orderId`                   | empty                     | Order ID created during testing     |
+| `paymentSessionId`          | empty                     | Stripe checkout session ID          |
+| `emailVerificationToken`    | empty                     | Token from register response        |
+| `newEmailVerificationToken` | empty                     | Token from update-email flow        |
 
 ## 3. Authorization Rule
 
@@ -156,14 +156,14 @@ Controller: [AuthController.java](D:/JAVA/ecommerce-backend/src/main/java/com/ec
 
 Fields:
 
-| Key | Type | Required | Example |
-|---|---|---|---|
-| `firstName` | Text | Yes | `John` |
-| `lastName` | Text | Yes | `Doe` |
-| `email` | Text | Yes | `{{userEmail}}` |
-| `password` | Text | Yes | `{{userPassword}}` |
-| `role` | Text | Yes | `ROLE_USER` |
-| `file` | File | No | profile image |
+| Key           | Type | Required | Example              |
+| ------------- | ---- | -------- | -------------------- |
+| `firstName` | Text | Yes      | `John`             |
+| `lastName`  | Text | Yes      | `Doe`              |
+| `email`     | Text | Yes      | `{{userEmail}}`    |
+| `password`  | Text | Yes      | `{{userPassword}}` |
+| `role`      | Text | Yes      | `ROLE_USER`        |
+| `file`      | File | No       | profile image        |
 
 Expected:
 
@@ -275,11 +275,11 @@ Expected:
 
 Optional fields:
 
-| Key | Type | Example |
-|---|---|---|
+| Key           | Type | Example    |
+| ------------- | ---- | ---------- |
 | `firstName` | Text | `Johnny` |
-| `lastName` | Text | `Doer` |
-| `file` | File | image |
+| `lastName`  | Text | `Doer`   |
+| `file`      | File | image      |
 
 Expected:
 
@@ -514,11 +514,11 @@ Login using:
 
 Fields:
 
-| Key | Type | Required | Example |
-|---|---|---|---|
-| `storeName` | Text | Yes | `My Gadget Store` |
-| `reason` | Text | No | `I want to sell electronics` |
-| `document` | File | Yes | ID proof or test document |
+| Key           | Type | Required | Example                        |
+| ------------- | ---- | -------- | ------------------------------ |
+| `storeName` | Text | Yes      | `My Gadget Store`            |
+| `reason`    | Text | No       | `I want to sell electronics` |
+| `document`  | File | Yes      | ID proof or test document      |
 
 Expected:
 
@@ -589,14 +589,14 @@ After seller approval, login again as `{{sellerEmail}}`.
 
 Fields:
 
-| Key | Type | Required | Example |
-|---|---|---|---|
-| `name` | Text | Yes | `iPhone 15` |
-| `description` | Text | Yes | `Latest smartphone` |
-| `price` | Text | Yes | `79999` |
-| `categoryId` | Text | Yes | `{{categoryId}}` |
-| `stock` | Text | Yes | `10` |
-| `file` | File | No | product image |
+| Key             | Type | Required | Example               |
+| --------------- | ---- | -------- | --------------------- |
+| `name`        | Text | Yes      | `iPhone 15`         |
+| `description` | Text | Yes      | `Latest smartphone` |
+| `price`       | Text | Yes      | `79999`             |
+| `categoryId`  | Text | Yes      | `{{categoryId}}`    |
+| `stock`       | Text | Yes      | `10`                |
+| `file`        | File | No       | product image         |
 
 Expected:
 
@@ -632,14 +632,14 @@ Expected:
 
 Example fields:
 
-| Key | Type | Example |
-|---|---|---|
-| `name` | Text | `iPhone 15 Pro` |
+| Key             | Type | Example                 |
+| --------------- | ---- | ----------------------- |
+| `name`        | Text | `iPhone 15 Pro`       |
 | `description` | Text | `Updated description` |
-| `price` | Text | `89999` |
-| `categoryId` | Text | `{{categoryId}}` |
-| `stock` | Text | `8` |
-| `file` | File | new image |
+| `price`       | Text | `89999`               |
+| `categoryId`  | Text | `{{categoryId}}`      |
+| `stock`       | Text | `8`                   |
+| `file`        | File | new image               |
 
 Expected:
 
@@ -828,7 +828,7 @@ Expected:
 Expected:
 
 - Status `200`
-- Paginated response
+- Paginated response (Note: `OrderSummaryResponse` now includes `itemThumbnails` for product visual previews)
 
 ### 13.4 Get order by id
 
@@ -838,7 +838,7 @@ Expected:
 
 Expected:
 
-- Status `200`
+- Status `200` (Note: `OrderItemResponse` now includes `imageUrl` for each product item)
 
 ### 13.5 Cancel order
 
@@ -892,10 +892,13 @@ Expected:
 
 ```json
 {
-  "message": "Payment confirmed",
+  "status": "OK",
+  "message": "Payment confirmed successfully",
   "paid": true
 }
 ```
+
+Note: A `"status": "PENDING"` indicates the payment is still in progress.
 
 ### 14.3 Refund payment
 
@@ -1024,6 +1027,7 @@ If you want one clean end-to-end Postman run, use this exact sequence:
 - Product IDs are UUIDs.
 - Order IDs and category IDs are numeric.
 - Payment confirmation requires a real Stripe session if you want to validate the full payment flow.
+- Valid Order Statuses: `CREATED`, `PENDING_PAYMENT`, `PAID`, `SHIPPED`, `DELIVERED`, `CANCELLED`, `FAILED`, `REFUNDED`.
 
 ## 19. What To Verify For Every Request
 
@@ -1044,4 +1048,3 @@ After manual Postman testing, the next step should be:
 2. Add collection tests
 3. Run the collection with Newman
 4. Add automated integration tests in Spring Boot
-

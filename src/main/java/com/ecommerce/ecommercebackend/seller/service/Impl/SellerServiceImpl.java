@@ -118,16 +118,22 @@ public class SellerServiceImpl implements SellerService {
 
         Users user = request.getUser();
 
-        SellerProfile profile = sellerProfileRepo.findByUser(user)
-                .orElseGet(() -> SellerProfile.builder()
-                        .user(user)
-                        .createdAt(LocalDateTime.now())
-                        .build());
+        // 1. Look for existing profile. Using a direct lookup to ensure we don't try to create a duplicate.
+        SellerProfile profile = sellerProfileRepo.findByUser(user).orElse(null);
+
+        if (profile == null) {
+            profile = SellerProfile.builder()
+                    .user(user)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+        }
+
 
         profile.setStoreName(request.getStoreName());
         sellerProfileRepo.save(profile);
 
         user.setRole(Role.ROLE_SELLER);
+        user.setSellerVerified(true);
         usersRepo.save(user);
 
         request.setStatus(SellerRequestStatus.APPROVED);
@@ -135,14 +141,19 @@ public class SellerServiceImpl implements SellerService {
         request.setReviewedBy(adminEmail);
         sellerRequestRepo.save(request);
 
-        emailService.sendEmail(
-                user.getEmail(),
-                "Seller Request Approved",
-                "Congratulations! Your seller request has been approved."
-        );
+        try {
+            emailService.sendEmail(
+                    user.getEmail(),
+                    "Seller Request Approved",
+                    "Congratulations! Your seller request has been approved."
+            );
+        } catch (Exception e) {
+            System.err.println("Approval email notification failed: " + e.getMessage());
+        }
 
         return new MessageResponse("Seller request approved successfully");
     }
+
 
     /**
      * Reject a seller request (ADMIN).
@@ -170,22 +181,46 @@ public class SellerServiceImpl implements SellerService {
 
         sellerRequestRepo.save(request);
 
-        emailService.sendEmail(
-                request.getUser().getEmail(),
-                "Seller Request Rejected",
-                "Your seller request was rejected."
-                        + (reason != null ? "\nReason: " + reason : "")
-        );
+        try {
+            emailService.sendEmail(
+                    request.getUser().getEmail(),
+                    "Seller Request Rejected",
+                    "Your seller request was rejected."
+                            + (reason != null ? "\nReason: " + reason : "")
+            );
+        } catch (Exception e) {
+            System.err.println("Rejection email notification failed: " + e.getMessage());
+        }
 
         return new MessageResponse("Seller request rejected");
     }
 
 
 
+
     @Override
+    @Transactional
     public List<SellerRequestResponse> getPendingRequests() {
-        // Fetch all seller requests with PENDING status
+        // 1. Fetch current pending requests from the database
         List<SellerRequest> pendingRequests = sellerRequestRepo.findAllByStatus(SellerRequestStatus.PENDING);
+
+        // 2. Backfill: Identify users with ROLE_SELLER who are NOT yet verified and miss a request record
+        // This handles users who registered before the seller request system was fully integrated.
+        List<Users> unverifiedSellers = usersRepo.findByRoleAndSellerVerifiedFalse(Role.ROLE_SELLER);
+
+        for (Users seller : unverifiedSellers) {
+            if (sellerRequestRepo.findByUser(seller).isEmpty()) {
+                SellerRequest stub = SellerRequest.builder()
+                        .user(seller)
+                        .storeName(seller.getFirstName() + "'s Store")
+                        .status(SellerRequestStatus.PENDING)
+                        .createdAt(seller.getCreatedAt() != null ? seller.getCreatedAt() : LocalDateTime.now())
+                        .reason("Backfilled: Record missing for existing unverified seller.")
+                        .build();
+                sellerRequestRepo.save(stub);
+                pendingRequests.add(stub);
+            }
+        }
 
         // Convert to DTOs
         return pendingRequests.stream()
@@ -193,6 +228,7 @@ public class SellerServiceImpl implements SellerService {
                 .toList();
     }
     /* ========================= Helper ========================= */
+
 
     private SellerRequestResponse toDto(SellerRequest r) {
         return new SellerRequestResponse(

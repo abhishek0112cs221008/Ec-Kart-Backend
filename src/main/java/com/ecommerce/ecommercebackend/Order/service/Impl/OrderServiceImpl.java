@@ -67,6 +67,14 @@ public class OrderServiceImpl implements OrderService {
             Product p = productRepository.findById(ci.getProductId())
                     .orElseThrow(() -> new ProductNotFoundException("Product not found with this id : " + ci.getProductId()));
 
+            if (p.getStock() < ci.getQuantity()) {
+                throw new ProductOutOfStockException("Insufficient stock for product : " + p.getName());
+            }
+
+            // Decrement stock during order creation (it will be restored if order is cancelled or expires)
+            p.setStock(p.getStock() - ci.getQuantity());
+            productRepository.save(p);
+
             BigDecimal subtotal = p.getPrice().multiply(BigDecimal.valueOf(ci.getQuantity()));
             total = total.add(subtotal);
 
@@ -216,6 +224,27 @@ public class OrderServiceImpl implements OrderService {
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
             product.setStock(product.getStock() + item.getQuantity());
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+    }
+
+    @Override
+    @Transactional
+    public void cancelOrderSystem(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("No order found with this Id : ", orderId));
+
+        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.PAID) {
+            return;
+        }
+
+        // restore stock
+        for (OrderItem item : order.getItems()) {
+            Product product = item.getProduct();
+            product.setStock(product.getStock() + item.getQuantity());
+            productRepository.save(product);
         }
 
         order.setStatus(OrderStatus.CANCELLED);

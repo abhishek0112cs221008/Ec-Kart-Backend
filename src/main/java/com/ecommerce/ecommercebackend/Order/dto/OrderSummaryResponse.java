@@ -24,5 +24,6 @@ public class OrderSummaryResponse {
     private OrderStatus status;
 
     private LocalDateTime createdAt;
-}
 
+    private java.util.List<String> itemThumbnails;
+}
