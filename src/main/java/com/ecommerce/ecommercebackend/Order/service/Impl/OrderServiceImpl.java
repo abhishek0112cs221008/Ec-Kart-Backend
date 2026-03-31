@@ -123,7 +123,6 @@ public class OrderServiceImpl implements OrderService {
             throw new ProductOutOfStockException("Insufficient stock");
         }
 
-        // TODO:: decrement stock after payment
 
         // decrement stock after creating order
         product.setStock(product.getStock() - quantity);
