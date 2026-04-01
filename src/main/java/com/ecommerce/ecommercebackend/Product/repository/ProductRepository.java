@@ -9,6 +9,7 @@ import java.util.UUID;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, UUID> {
+    List<Product> findByName(String name);
     boolean existsByNameIgnoreCase(String name);
 
     // check if their is a product in the category (for category deletion)

@@ -10,6 +10,8 @@ import java.util.UUID;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
+    List<Review> findByProductId(UUID productId);
+
     List<Review> findByProductIdOrderByCreatedAtDesc(UUID productId);
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.product.id = :productId")
