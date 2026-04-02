@@ -4,16 +4,14 @@ import com.ecommerce.ecommercebackend.payment.entity.Payment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
-
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByOrderIdAndStatus(Long orderId, Payment.Status status);
-    Optional<Payment> findBySessionId(String sessionId);
+    Optional<Payment> findByRazorpayOrderId(String razorpayOrderId);
 
     List<Payment> findByStatusAndCreatedAtBefore(Payment.Status status, OffsetDateTime cutoff);
 }

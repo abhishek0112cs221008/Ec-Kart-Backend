@@ -27,16 +27,19 @@ public class Order {
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 
+    @Builder.Default
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 50)
     private OrderStatus status = OrderStatus.CREATED;
 
     @Column(length = 1024)
     private String shippingAddress;
 
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
 

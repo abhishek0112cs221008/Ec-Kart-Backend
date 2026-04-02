@@ -2,9 +2,10 @@ package com.ecommerce.ecommercebackend.payment.service.Impl;
 
 import com.ecommerce.ecommercebackend.payment.entity.Payment;
 import com.ecommerce.ecommercebackend.payment.repository.PaymentRepository;
-import com.stripe.model.PaymentIntent;
-import com.stripe.model.checkout.Session;
+import com.razorpay.Order;
+import com.razorpay.RazorpayClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -12,73 +13,48 @@ import org.springframework.stereotype.Service;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-
 /**
- * Check for expired payments every minute.(after 60 minutes the link(of payment) will be expired )
+ * Check for expired payments every minute.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentExpirationService {
 
     private final PaymentRepository paymentRepository;
     private final com.ecommerce.ecommercebackend.Order.service.OrderService orderService;
+    private final RazorpayClient razorpayClient;
 
     @Value("${payment.session.ttl.minutes:60}")
     private long ttlMinutes;
 
-
-    @Scheduled(cron = "${payment.expire-check-cron}") // every 1 minute
+    @Scheduled(cron = "${payment.expire-check-cron}")
     public void expireOldPayments() {
         OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(ttlMinutes);
         List<Payment> toExpire = paymentRepository.findByStatusAndCreatedAtBefore(Payment.Status.CREATED, cutoff);
 
         for (Payment p : toExpire) {
             try {
-                // double-check with Stripe: if user already paid, confirm and continue
-                Session session = Session.retrieve(p.getSessionId());
-                boolean paid = false;
-                if (session.getPaymentIntent() != null) {
-                    PaymentIntent pi = PaymentIntent.retrieve(session.getPaymentIntent());
-                    paid = "succeeded".equals(pi.getStatus());
-                } else if ("paid".equals(session.getPaymentStatus())) {
-                    paid = true;
-                }
+                // Check with Razorpay
+                Order razorpayOrder = razorpayClient.orders.fetch(p.getRazorpayOrderId());
+                String status = razorpayOrder.get("status");
 
-                if (paid) {
+                if ("paid".equalsIgnoreCase(status)) {
                     p.setStatus(Payment.Status.PAID);
                     p.setPaidAt(OffsetDateTime.now());
                     paymentRepository.save(p);
                     continue;
                 }
 
-                // not paid => expire locally
+                // If expired or still created after TTL
                 p.setStatus(Payment.Status.FAILED);
                 paymentRepository.save(p);
 
-                // Restore stock by cancelling the order
-                try {
-                    // We use "SYSTEM" or a placeholder email since this is an automated cleanup
-                    // But cancelOrder checks ownership via email. 
-                    // To bypass this, we might need a system-level cancel method or just 
-                    // manually restore stock here.
-                    // Given the current architecture, I'll manually restore stock to avoid email checks.
-                    restoreStockForOrder(p.getOrderId());
-                } catch (Exception e) {
-                    // log & continue
-                }
+                // Restore stock
+                restoreStockForOrder(p.getOrderId());
 
-                // OPTIONAL: cancel the PaymentIntent to avoid later use
-                if (session.getPaymentIntent() != null) {
-                    try {
-                        PaymentIntent pi = PaymentIntent.retrieve(session.getPaymentIntent());
-                        // only cancel if it's in a cancelable state; this call may throw if not allowed
-                        pi.cancel();
-                    } catch (Exception e) {
-                        // log & continue — cancellation not required
-                    }
-                }
             } catch (Exception ex) {
-                // log error and continue with next
+                log.error("Error expiring payment {}", p.getRazorpayOrderId(), ex);
             }
         }
     }
@@ -87,8 +63,7 @@ public class PaymentExpirationService {
         try {
             orderService.cancelOrderSystem(orderId);
         } catch (Exception e) {
-            // log error
+            log.error("Failed to cancel order system {}", orderId, e);
         }
     }
 }
-

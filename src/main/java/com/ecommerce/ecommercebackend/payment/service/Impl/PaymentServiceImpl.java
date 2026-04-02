@@ -1,36 +1,29 @@
 package com.ecommerce.ecommercebackend.payment.service.Impl;
 
 import com.ecommerce.ecommercebackend.Order.entity.Order;
-import com.ecommerce.ecommercebackend.Order.entity.OrderItem;
 import com.ecommerce.ecommercebackend.Order.entity.OrderStatus;
 import com.ecommerce.ecommercebackend.Order.repository.OrderRepository;
-import com.ecommerce.ecommercebackend.payment.dto.PaymentConfirmDto;
-import com.ecommerce.ecommercebackend.payment.dto.PaymentCreateResponse;
-import com.ecommerce.ecommercebackend.payment.dto.RefundRequest;
+import com.ecommerce.ecommercebackend.payment.dto.*;
 import com.ecommerce.ecommercebackend.payment.entity.Payment;
 import com.ecommerce.ecommercebackend.payment.exception.OrderPaymentNotAllowedException;
 import com.ecommerce.ecommercebackend.payment.exception.PaymentNotFoundException;
-import com.ecommerce.ecommercebackend.payment.exception.StripeOperationException;
 import com.ecommerce.ecommercebackend.payment.repository.PaymentRepository;
 import com.ecommerce.ecommercebackend.payment.service.PaymentService;
-import com.ecommerce.ecommercebackend.payment.utils.StripeUtils;
-import com.stripe.Stripe;
-import com.stripe.exception.StripeException;
-import com.stripe.model.PaymentIntent;
-import com.stripe.model.checkout.Session;
-import com.stripe.param.checkout.SessionCreateParams;
-import jakarta.annotation.PostConstruct;
+import com.razorpay.RazorpayClient;
+import com.razorpay.RazorpayException;
+import com.razorpay.Utils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
-import lombok.extern.slf4j.Slf4j;
-
-@SuppressWarnings("ALL")
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -38,267 +31,142 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
+    private final RazorpayClient razorpayClient;
 
-    @Value("${stripe.secretKey}")
-    private String stripeApiKey;
+    @Value("${razorpay.keyId}")
+    private String razorpayKeyId;
 
-    @Value("${app.base-url}")
-    private String appBaseUrl;
+    @Value("${razorpay.keySecret}")
+    private String razorpayKeySecret;
 
-    @PostConstruct
-    public void init() {
-        Stripe.apiKey = stripeApiKey;
-    }
-
-    //---------------------------------------------------createCheckoutSessionForOrder--------------------------------------------------//
-    /**
-     * Create a checkout session for the given orderId, verifying that this is the owner's order
-     * matches the order's owner email. Returns the created Session (caller extracts id + url).
-     */
+    @Override
     public PaymentCreateResponse createCheckoutSessionForOrder(Long orderId, String userEmail) {
-
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() ->
-                        new OrderPaymentNotAllowedException("Order not found: " + orderId));
+                .orElseThrow(() -> new OrderPaymentNotAllowedException("Order not found: " + orderId));
 
-        if (order.getUser() == null || order.getUser().getEmail() == null ||
-                !order.getUser().getEmail().equalsIgnoreCase(userEmail)) {
+        if (order.getUser() == null || !order.getUser().getEmail().equalsIgnoreCase(userEmail)) {
             throw new OrderPaymentNotAllowedException("Order does not belong to authenticated user");
         }
 
-
-        SessionCreateParams.Builder sessionBuilder = SessionCreateParams.builder()
-                .setMode(SessionCreateParams.Mode.PAYMENT)
-                .setSuccessUrl(appBaseUrl + "/payment/success?session_id={CHECKOUT_SESSION_ID}")
-                .setCancelUrl(appBaseUrl + "/payment/cancel")
-                .setCustomerEmail(userEmail)
-                .putMetadata("order_id", String.valueOf(order.getId()));
-
-        for (OrderItem item : order.getItems()) {
-            BigDecimal itemAmountInCentsBD = item.getPriceAtPurchase()
+        try {
+            // Amount in paise (multiply by 100)
+            BigDecimal amountInPaise = order.getTotalAmount()
                     .setScale(2, RoundingMode.HALF_UP)
                     .multiply(new BigDecimal(100));
-            long itemAmountInCents = itemAmountInCentsBD.longValueExact();
+            
+            JSONObject orderRequest = new JSONObject();
+            orderRequest.put("amount", amountInPaise.longValue());
+            orderRequest.put("currency", "INR");
+            orderRequest.put("receipt", "order_rcptid_" + orderId);
+            orderRequest.put("payment_capture", 1); // Auto capture
 
-            sessionBuilder.addLineItem(
-                    SessionCreateParams.LineItem.builder()
-                            .setQuantity((long) item.getQuantity())
-                            .setPriceData(
-                                    SessionCreateParams.LineItem.PriceData.builder()
-                                            .setCurrency("inr")
-                                            .setUnitAmount(itemAmountInCents)
-                                            .setProductData(
-                                                    SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                                            .setName(item.getProduct().getName())
-                                                            .build()
-                                            )
-                                            .build()
-                            )
-                            .build()
+            com.razorpay.Order razorpayOrder = razorpayClient.orders.create(orderRequest);
+
+            Payment payment = new Payment(order.getId(), razorpayOrder.get("id"));
+            payment.setStatus(Payment.Status.CREATED);
+            payment.setCreatedAt(OffsetDateTime.now());
+            payment.setExpiresAt(payment.getCreatedAt().plusMinutes(60));
+            paymentRepository.save(payment);
+
+            order.setStatus(OrderStatus.PENDING_PAYMENT);
+            orderRepository.save(order);
+
+            return PaymentCreateResponse.of(
+                    razorpayOrder.get("id"),
+                    amountInPaise.longValue(),
+                    "INR",
+                    razorpayKeyId,
+                    order.getUser().getFirstName() + " " + order.getUser().getLastName(),
+                    order.getUser().getEmail(),
+                    order.getUser().getPhoneNumber()
             );
+
+        } catch (RazorpayException e) {
+            log.error("Razorpay order creation failed", e);
+            throw new RuntimeException("Payment initiation failed: " + e.getMessage());
         }
-
-        Session session;
-        try {
-            session = Session.create(sessionBuilder.build());
-        } catch (StripeException e) {
-            throw new StripeOperationException("Stripe error while creating checkout session", e);
-        }
-
-
-        Payment payment = new Payment(order.getId(), session.getId());
-        payment.setStatus(Payment.Status.CREATED);
-        payment.setCreatedAt(OffsetDateTime.now());
-        payment.setExpiresAt(payment.getCreatedAt().plusMinutes(60)); // TTL = 60 minutes (after that the transaction will be canceled)
-        paymentRepository.save(payment);
-
-        order.setStatus(OrderStatus.PENDING_PAYMENT); // Awaiting payment confirmation from Stripe
-
-        return  PaymentCreateResponse.of(session.getId(), session.getUrl());
     }
 
-    //---------------------------------------------------confirmPaymentBySessionId--------------------------------------------------//
-
-    /**
-     * Confirm payment by calling Stripe to retrieve the session/paymentIntent status.
-     * Also verifies the session's customer email or order owner equals authenticated user.
-     * If paid -> mark the order as PAID and update the Payment record.
-     *
-     * Throws:
-     * - PaymentNotFoundException when we can't map session -> order
-     * - OrderPaymentNotAllowedException for ownership / order problems
-     * - PaymentNotCompletedException when the payment hasn't succeeded yet
-     * - StripeOperationException wrapping Stripe SDK errors
-     */
     @Override
-    public PaymentConfirmDto confirmPaymentBySessionId(String sessionId, String userEmail) {
-
-        Session session;
-        PaymentIntent pi = null; // keep PaymentIntent reference for later DB persistence
+    public PaymentConfirmDto confirmPayment(PaymentConfirmRequest request, String userEmail) {
         try {
-            session = Session.retrieve(sessionId);
-        } catch (StripeException e) {
-            throw new StripeOperationException("Stripe error while confirming payment", e);
-        }
+            // Verify signature
+            JSONObject options = new JSONObject();
+            options.put("razorpay_order_id", request.getRazorpayOrderId());
+            options.put("razorpay_payment_id", request.getRazorpayPaymentId());
+            options.put("razorpay_signature", request.getRazorpaySignature());
 
-        String sessionEmail = session.getCustomerEmail();
-        if (sessionEmail != null && !sessionEmail.equalsIgnoreCase(userEmail)) {
-            throw new OrderPaymentNotAllowedException("Authenticated user does not match session email");
-        }
+            boolean isValid = Utils.verifyPaymentSignature(options, razorpayKeySecret);
 
-        String orderIdStr = session.getMetadata() != null
-                ? session.getMetadata().get("order_id")
-                : null;
-
-        if (orderIdStr == null) {
-            Payment payment = paymentRepository.findBySessionId(sessionId)
-                    .orElseThrow(() ->
-                            new PaymentNotFoundException("Payment not found for session: " + sessionId));
-            orderIdStr = String.valueOf(payment.getOrderId());
-        }
-
-        Order order = orderRepository.findById(Long.valueOf(orderIdStr))
-                .orElseThrow(() ->
-                        new OrderPaymentNotAllowedException("Order not found"));
-
-        if (!order.getUser().getEmail().equalsIgnoreCase(userEmail)) {
-            throw new OrderPaymentNotAllowedException("Order does not belong to authenticated user");
-        }
-
-        boolean paid = false;
-        try {
-            if (session.getPaymentIntent() != null) {
-                // retrieve PaymentIntent once and keep reference
-                pi = PaymentIntent.retrieve(session.getPaymentIntent());
-                paid = "succeeded".equals(pi.getStatus());
-            } else if ("paid".equals(session.getPaymentStatus())) {
-                paid = true;
+            if (!isValid) {
+                return PaymentConfirmDto.pending("Invalid payment signature");
             }
-        } catch (StripeException e) {
-            throw new StripeOperationException("Stripe error while checking payment status", e);
-        }
 
-        if (!paid) {
-            return PaymentConfirmDto.pending("Payment not completed yet");
-        }
+            Payment payment = paymentRepository.findByRazorpayOrderId(request.getRazorpayOrderId())
+                    .orElseThrow(() -> new PaymentNotFoundException("Payment not found for order: " + request.getRazorpayOrderId()));
 
-        if (order.getStatus() != OrderStatus.PAID) {
+            Order order = orderRepository.findById(payment.getOrderId())
+                    .orElseThrow(() -> new OrderPaymentNotAllowedException("Order not found"));
+
+            if (!order.getUser().getEmail().equalsIgnoreCase(userEmail)) {
+                throw new OrderPaymentNotAllowedException("User mismatch");
+            }
+
+            payment.setRazorpayPaymentId(request.getRazorpayPaymentId());
+            payment.setRazorpaySignature(request.getRazorpaySignature());
+            payment.setStatus(Payment.Status.PAID);
+            payment.setPaidAt(OffsetDateTime.now());
+            paymentRepository.save(payment);
+
             order.setStatus(OrderStatus.PAID);
             orderRepository.save(order);
+
+            return PaymentConfirmDto.ok("Payment successful and verified");
+
+        } catch (Exception e) {
+            log.error("Razorpay confirmation error", e);
+            return PaymentConfirmDto.pending("Verification failed: " + e.getMessage());
         }
-
-        String piId = session.getPaymentIntent();
-        PaymentIntent finalPi = pi;
-        paymentRepository.findBySessionId(sessionId).ifPresent(p -> {
-            // store PaymentIntent ID
-            if (piId != null && !piId.isBlank()) {
-                p.setPaymentIntentId(piId);
-            }
-
-            // mark paid
-            p.setStatus(Payment.Status.PAID);
-            p.setPaidAt(java.time.OffsetDateTime.now());
-
-            // application_fee_amount is in cents (Long) when using Connect
-            if (finalPi != null) {
-                Long applicationFee = finalPi.getApplicationFeeAmount(); // maybe null
-                Long amount = finalPi.getAmount(); // total number in cents
-
-                // sellerStripeAccountId -> transfer_data.destination
-                if (finalPi.getTransferData() != null) {
-                    String dest = finalPi.getTransferData().getDestination();
-                    p.setSellerStripeAccountId(dest);
-                }
-
-                // platform fee (store as cents)
-                if (applicationFee != null) {
-                    p.setPlatformFeeAmount(applicationFee);
-                }
-
-                // sellerAmount = total - platformFee
-                if (amount != null) {
-                    long fee = (applicationFee != null ? applicationFee : 0L);
-                    p.setSellerAmount(amount - fee);
-                }
-            }
-
-            paymentRepository.save(p);
-        });
-
-        return PaymentConfirmDto.ok("Payment confirmed successfully");
     }
 
-    //---------------------------------------------------refundPaymentForOrder--------------------------------------------------//
-
-    /**
-     * Refund a completed payment for an order using Stripe.
-     * Supports full or partial refunds based on the provided amount.
-     *
-     * The service:
-     * - Verifies a PAID payment exists for the order
-     * - Ensures the order belongs to the authenticated user
-     * - Calls Stripe to create the refund
-     * - Updates the local payment status to REFUNDED
-     *
-     * Throws:
-     * - PaymentNotFoundException when no paid payment exists for the order
-     * - OrderPaymentNotAllowedException when the order does not belong to the user
-     * - IllegalArgumentException when the refund amount is invalid
-     * - StripeOperationException when Stripe refund creation fails
-     *
-     * @param request the refund request containing order ID and optional refund amount
-     * @param userEmail the authenticated user's email
-     * @return the created Stripe Refund object
-     */
     @Override
-    public com.stripe.model.Refund refundPaymentForOrder(RefundRequest request, String userEmail) {
-        // find the paid Payment for the order
+    public Object refundPaymentForOrder(RefundRequest request, String userEmail) {
         Payment payment = paymentRepository.findByOrderIdAndStatus(request.getOrderId(), Payment.Status.PAID)
                 .orElseThrow(() -> new PaymentNotFoundException("Paid payment not found for order id=" + request.getOrderId()));
 
-        // check ownership
         Order order = orderRepository.findById(request.getOrderId())
-                .orElseThrow(() -> new OrderPaymentNotAllowedException("Order not found id=" + request.getOrderId()));
+                .orElseThrow(() -> new OrderPaymentNotAllowedException("Order not found"));
+
         if (!order.getUser().getEmail().equalsIgnoreCase(userEmail)) {
             throw new OrderPaymentNotAllowedException("User cannot refund this order");
         }
 
-        String paymentIntentId = payment.getPaymentIntentId();
-        log.debug("Refund requested for orderId={} paymentId={} paymentIntentId={}",
-                request.getOrderId(), payment.getId(), paymentIntentId);
-
-        if (paymentIntentId == null || paymentIntentId.isBlank()) {
-            throw new PaymentNotFoundException("PaymentIntent ID missing for payment id=" + payment.getId());
-        }
-
         try {
-            com.stripe.param.RefundCreateParams.Builder builder = com.stripe.param.RefundCreateParams.builder()
-                    .setPaymentIntent(paymentIntentId);
-
-            // validate and set a partial refund amount if provided
+            JSONObject refundRequest = new JSONObject();
+            refundRequest.put("payment_id", payment.getRazorpayPaymentId());
+            
             if (request.getAmount() != null) {
-                BigDecimal originalAmount = order.getTotalAmount();
-                if (originalAmount != null && request.getAmount().compareTo(originalAmount) > 0) {
-                    throw new IllegalArgumentException("Refund amount cannot be greater than original amount");
-                }
-                long cents = StripeUtils.amountToCents(request.getAmount()); // your util
-                builder.setAmount(cents);
+                BigDecimal amountInPaise = request.getAmount().multiply(new BigDecimal(100));
+                refundRequest.put("amount", amountInPaise.longValue());
             }
 
-            com.stripe.model.Refund stripeRefund = com.stripe.model.Refund.create(builder.build());
+            com.razorpay.Refund razorpayRefund = razorpayClient.payments.refund(refundRequest);
 
-            // update local payment status and persisted fields
             payment.setStatus(Payment.Status.REFUNDED);
-            order.setStatus(OrderStatus.REFUNDED);
-            payment.setRefundedAt(java.time.OffsetDateTime.now());
+            payment.setRefundedAt(OffsetDateTime.now());
             paymentRepository.save(payment);
 
-            return stripeRefund;
-        } catch (com.stripe.exception.StripeException e) {
-            log.error("Stripe refund failed for paymentId={} paymentIntentId={}: {}", payment.getId(), paymentIntentId, e.getMessage(), e);
-            throw new StripeOperationException("Stripe refund failed: " + e.getMessage(), e);
+            order.setStatus(OrderStatus.REFUNDED);
+            orderRepository.save(order);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("refundId", razorpayRefund.get("id"));
+            response.put("status", razorpayRefund.get("status"));
+            return response;
+
+        } catch (RazorpayException e) {
+            log.error("Razorpay refund failed", e);
+            throw new RuntimeException("Refund failed: " + e.getMessage());
         }
     }
-
 }
-

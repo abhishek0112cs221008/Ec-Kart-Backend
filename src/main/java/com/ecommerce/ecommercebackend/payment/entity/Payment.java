@@ -1,6 +1,5 @@
 package com.ecommerce.ecommercebackend.payment.entity;
 
-
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,31 +20,34 @@ public class Payment {
     private Long orderId;
 
     @Column(unique = true)
-    private String sessionId;
+    private String razorpayOrderId;
 
-    private Long platformFeeAmount;       // cents
-    private Long sellerAmount;            // cents
-    private String sellerStripeAccountId;
+    private Long platformFeeAmount;       // paise
+    private Long sellerAmount;            // paise
+    private String sellerRazorpayAccountId;
 
     public enum Status { CREATED, PAID, FAILED, REFUNDED }
 
-    // store PaymentIntent id (if available) to enable refunds/cancels
-    @Column(name = "payment_intent_id" , unique = true)
-    private String paymentIntentId;
+    @Column(name = "razorpay_payment_id" , unique = true)
+    private String razorpayPaymentId;
 
+    @Column(name = "razorpay_signature")
+    private String razorpaySignature;
+
+    @Builder.Default
     @Enumerated(EnumType.STRING)
+    @Column(length = 50)
     private Status status = Status.CREATED;
 
+    @Builder.Default
     private OffsetDateTime createdAt = OffsetDateTime.now();
     private OffsetDateTime paidAt;
     private OffsetDateTime expiresAt;
     private OffsetDateTime refundedAt;
 
-    public Payment(Long orderId, String sessionId) {
+    public Payment(Long orderId, String razorpayOrderId) {
         this.orderId = orderId;
-        this.sessionId = sessionId;
+        this.razorpayOrderId = razorpayOrderId;
         this.createdAt = OffsetDateTime.now();
     }
-
 }
-
