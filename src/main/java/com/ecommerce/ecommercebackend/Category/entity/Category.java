@@ -1,5 +1,6 @@
 package com.ecommerce.ecommercebackend.Category.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.ecommerce.ecommercebackend.Product.entity.Product;
 import jakarta.persistence.*;
 import lombok.*;
@@ -40,9 +41,13 @@ public class Category {
     @JoinColumn(name = "parent_id")
     private Category parent; // points to the parent category
 
+    @JsonIgnore
+    @Builder.Default
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL)
     private List<Category> subCategories = new ArrayList<>(); // list of children categories
 
+    @JsonIgnore
+    @Builder.Default
     @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Product> products = new ArrayList<>(); // list of products in this category
 

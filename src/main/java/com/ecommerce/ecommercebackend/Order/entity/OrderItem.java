@@ -1,6 +1,5 @@
 package com.ecommerce.ecommercebackend.Order.entity;
 
-
 import com.ecommerce.ecommercebackend.Product.entity.Product;
 import jakarta.persistence.*;
 import lombok.*;
@@ -18,6 +17,7 @@ public class OrderItem {
     private Long id;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Order order;
 
     @ManyToOne(optional = false, fetch = FetchType.EAGER)
@@ -29,4 +29,3 @@ public class OrderItem {
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal priceAtPurchase;
 }
-

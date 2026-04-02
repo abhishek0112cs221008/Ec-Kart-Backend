@@ -32,7 +32,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 
-@SuppressWarnings("ALL")
+@SuppressWarnings("unchecked")
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -89,7 +89,7 @@ public class ProductServiceImpl implements ProductService {
 
         // Upload Product image to Cloudinary
         if (file != null && !file.isEmpty()) {
-            Map uploadResult = cloudinary.uploader().upload(file.getBytes(),
+            Map<String, Object> uploadResult = (Map<String, Object>) cloudinary.uploader().upload(file.getBytes(),
                     ObjectUtils.asMap(
                             "folder", "Products",// folder name
                             "public_id", name,//file name
@@ -125,9 +125,6 @@ public class ProductServiceImpl implements ProductService {
 
         if (Boolean.FALSE.equals(product.getActive())) {
             throw new ProductInactiveException("Product is not active right now.");
-        }
-        if (product.getStock() == null || product.getStock() <= 0) {
-            throw new ProductOutOfStockException("Sorry, product is out of stock.");
         }
         return mapToResponse(product, "Product found successfully :D ");
 
@@ -234,7 +231,7 @@ public class ProductServiceImpl implements ProductService {
 
         // update image if provided
         if (file != null && !file.isEmpty()) {
-            Map uploadResult = cloudinary.uploader().upload(file.getBytes(),
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(file.getBytes(),
                     ObjectUtils.asMap(
                             "folder", "Products",
                             "public_id", product.getName(),

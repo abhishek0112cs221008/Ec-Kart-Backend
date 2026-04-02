@@ -1,6 +1,7 @@
 package com.ecommerce.ecommercebackend.payment.service.Impl;
 
 import com.ecommerce.ecommercebackend.Order.entity.Order;
+import com.ecommerce.ecommercebackend.Order.entity.OrderItem;
 import com.ecommerce.ecommercebackend.Order.entity.OrderStatus;
 import com.ecommerce.ecommercebackend.Order.repository.OrderRepository;
 import com.ecommerce.ecommercebackend.payment.dto.PaymentConfirmDto;
@@ -65,44 +66,41 @@ public class PaymentServiceImpl implements PaymentService {
             throw new OrderPaymentNotAllowedException("Order does not belong to authenticated user");
         }
 
-        BigDecimal amountInCentsBD = order.getTotalAmount()
-                .setScale(2, RoundingMode.HALF_UP)
-                .multiply(new BigDecimal(100));
-        long amountInCents = amountInCentsBD.longValueExact();
 
-        SessionCreateParams.LineItem.PriceData.ProductData productData =
-                SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                        .setName("Order #" + order.getId())
-                        .build();
+        SessionCreateParams.Builder sessionBuilder = SessionCreateParams.builder()
+                .setMode(SessionCreateParams.Mode.PAYMENT)
+                .setSuccessUrl(appBaseUrl + "/payment/success?session_id={CHECKOUT_SESSION_ID}")
+                .setCancelUrl(appBaseUrl + "/payment/cancel")
+                .setCustomerEmail(userEmail)
+                .putMetadata("order_id", String.valueOf(order.getId()));
 
-        SessionCreateParams.LineItem.PriceData priceData =
-                SessionCreateParams.LineItem.PriceData.builder()
-                        .setCurrency("usd")
-                        .setUnitAmount(amountInCents)
-                        .setProductData(productData)
-                        .build();
+        for (OrderItem item : order.getItems()) {
+            BigDecimal itemAmountInCentsBD = item.getPriceAtPurchase()
+                    .setScale(2, RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal(100));
+            long itemAmountInCents = itemAmountInCentsBD.longValueExact();
 
-        SessionCreateParams.LineItem lineItem =
-                SessionCreateParams.LineItem.builder()
-                        .setPriceData(priceData)
-                        .setQuantity(1L)
-                        .build();
-
-        String successUrl = appBaseUrl + "/payment/success?session_id={CHECKOUT_SESSION_ID}";
-        String cancelUrl  = appBaseUrl + "/payment/cancel";
+            sessionBuilder.addLineItem(
+                    SessionCreateParams.LineItem.builder()
+                            .setQuantity((long) item.getQuantity())
+                            .setPriceData(
+                                    SessionCreateParams.LineItem.PriceData.builder()
+                                            .setCurrency("inr")
+                                            .setUnitAmount(itemAmountInCents)
+                                            .setProductData(
+                                                    SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                                                            .setName(item.getProduct().getName())
+                                                            .build()
+                                            )
+                                            .build()
+                            )
+                            .build()
+            );
+        }
 
         Session session;
         try {
-            session = Session.create(
-                    SessionCreateParams.builder()
-                            .addLineItem(lineItem)
-                            .setMode(SessionCreateParams.Mode.PAYMENT)
-                            .setSuccessUrl(successUrl)
-                            .setCancelUrl(cancelUrl)
-                            .setCustomerEmail(userEmail)
-                            .putMetadata("order_id", String.valueOf(order.getId()))
-                            .build()
-            );
+            session = Session.create(sessionBuilder.build());
         } catch (StripeException e) {
             throw new StripeOperationException("Stripe error while creating checkout session", e);
         }

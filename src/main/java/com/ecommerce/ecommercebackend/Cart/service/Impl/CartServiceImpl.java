@@ -14,11 +14,14 @@ import com.ecommerce.ecommercebackend.auth.dto.Responses.MessageResponse;
 import com.ecommerce.ecommercebackend.auth.exception.UserNotFoundException;
 import com.ecommerce.ecommercebackend.entity.Users;
 import com.ecommerce.ecommercebackend.repository.UsersRepo;
+import com.ecommerce.ecommercebackend.ai.entity.NegotiatedOffer;
+import com.ecommerce.ecommercebackend.ai.repository.NegotiatedOfferRepository;
 import lombok.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -31,8 +34,7 @@ public class CartServiceImpl implements CartService {
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
     private final UsersRepo usersRepository;
-
-
+    private final NegotiatedOfferRepository negotiatedOfferRepository;
 
     /**
      * Add a product to the user's cart.
@@ -42,16 +44,18 @@ public class CartServiceImpl implements CartService {
      *
      * @param userEmail the email of the user adding the product
      * @param productId the UUID of the product to add
-     * @param quantity the quantity to add (defaults to 1 if null or <=0)
+     * @param quantity  the quantity to add (defaults to 1 if null or <=0)
      * @return the updated {@link CartResponse} including all current items
-     * @throws UserNotFoundException if the user email does not exist
-     * @throws ProductNotFoundException if the product ID does not exist
-     * @throws ProductOutOfStockException if the product is inactive or stock is insufficient
+     * @throws UserNotFoundException      if the user email does not exist
+     * @throws ProductNotFoundException   if the product ID does not exist
+     * @throws ProductOutOfStockException if the product is inactive or stock is
+     *                                    insufficient
      */
     @Override
     @Transactional
     public CartResponse addToCart(String userEmail, UUID productId, Integer quantity) {
-        if (quantity == null || quantity <= 0) quantity = 1;
+        if (quantity == null || quantity <= 0)
+            quantity = 1;
 
         Users user = usersRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new UserNotFoundException("User not found with email " + userEmail));
@@ -100,10 +104,6 @@ public class CartServiceImpl implements CartService {
 
     }
 
-
-
-
-
     /**
      * Update the quantity of a product in the user's cart.
      *
@@ -111,10 +111,10 @@ public class CartServiceImpl implements CartService {
      *
      * @param userEmail the email of the user updating the cart
      * @param productId the UUID of the product to update
-     * @param quantity the new quantity for the product
+     * @param quantity  the new quantity for the product
      * @return the updated {@link CartResponse} including all current items
-     * @throws UserNotFoundException if the user email does not exist
-     * @throws ProductNotFoundException if the product is not in the cart
+     * @throws UserNotFoundException      if the user email does not exist
+     * @throws ProductNotFoundException   if the product is not in the cart
      * @throws ProductOutOfStockException if the new quantity exceeds product stock
      */
     @Override
@@ -152,9 +152,6 @@ public class CartServiceImpl implements CartService {
 
     }
 
-
-
-
     /**
      * Remove a product from the user's cart by productId.
      *
@@ -162,7 +159,8 @@ public class CartServiceImpl implements CartService {
      * @param productId the UUID of the product to remove
      * @return the updated {@link CartResponse} including remaining items
      * @throws UserNotFoundException if the user email does not exist
-     */    @Override
+     */
+    @Override
     @Transactional
     public CartResponse removeFromCart(String userEmail, UUID productId) {
         Users user = usersRepository.findByEmail(userEmail)
@@ -186,10 +184,6 @@ public class CartServiceImpl implements CartService {
 
     }
 
-
-
-
-
     /**
      * Get the current cart for the user.
      *
@@ -198,7 +192,8 @@ public class CartServiceImpl implements CartService {
      * @param userEmail the email of the user retrieving the cart
      * @return the {@link CartResponse} including all items and total price
      * @throws UserNotFoundException if the user email does not exist
-     */    @Override
+     */
+    @Override
     @Transactional(readOnly = true)
     public CartResponse getCart(String userEmail) {
         Users user = usersRepository.findByEmail(userEmail)
@@ -215,16 +210,14 @@ public class CartServiceImpl implements CartService {
 
     }
 
-
-
-
     /**
      * Clear all items from the user's cart.
      *
      * @param userEmail the email of the user clearing the cart
      * @return a {@link MessageResponse} confirming the cart has been cleared
      * @throws UserNotFoundException if the user email does not exist
-     */    @Override
+     */
+    @Override
     @Transactional
     public MessageResponse clearCart(String userEmail) {
         Users user = usersRepository.findByEmail(userEmail)
@@ -237,7 +230,8 @@ public class CartServiceImpl implements CartService {
         return new MessageResponse(" Cart cleared successfully.");
     }
 
-    //---------------------------------------------------mapping helpers--------------------------------------------------//
+    // ---------------------------------------------------mapping
+    // helpers--------------------------------------------------//
 
     /**
      * Helper method to map a {@link Cart} entity to {@link CartResponse} DTO.
@@ -247,26 +241,44 @@ public class CartServiceImpl implements CartService {
      * @param cart the cart entity to map
      * @return a {@link CartResponse} representing the cart state
      */
+    private CartItemResponse mapToCartItemResponse(CartItem i, Users user, LocalDateTime now) {
+        Product p = i.getProduct();
+
+        // Check for active negotiated offer
+        BigDecimal effectivePrice = p.getPrice();
+        Optional<NegotiatedOffer> offer = negotiatedOfferRepository.findByUserAndProductAndExpiryDateAfter(user, p,
+                now);
+
+        if (offer.isPresent()) {
+            effectivePrice = offer.get().getNegotiatedPrice();
+        }
+
+        return CartItemResponse.builder()
+                .productId(p.getId())
+                .productName(p.getName())
+                .price(effectivePrice)
+                .quantity(i.getQuantity())
+                .imageUrl(p.getImageUrl())
+                .build();
+    }
+
     private CartResponse mapToCartResponse(Cart cart) {
-        List<CartItemResponse> items = (cart.getItems() == null ? Collections.emptyList() : cart.getItems()).stream()
-                .map(o -> {
-                    CartItem i = (CartItem) o;
-                    return CartItemResponse.builder()
-                            .productId(i.getProduct().getId())
-                            .productName(i.getProduct().getName())
-                            .price(i.getProduct().getPrice())
-                            .quantity(i.getQuantity())
-                            .imageUrl(i.getProduct().getImageUrl())
-                            .build();
-                }).collect(Collectors.toList());
+        Users user = cart.getUser();
+        LocalDateTime now = LocalDateTime.now();
 
+        // Resolve items list to a local variable to help the compiler with type
+        // inference
+        List<CartItem> cartItems = cart.getItems();
+        if (cartItems == null) {
+            cartItems = Collections.emptyList();
+        }
 
-        BigDecimal total = (cart.getItems() == null ? Collections.emptyList() : cart.getItems()).stream()
-                .map(o -> {
-                    CartItem i = (CartItem) o;
-                    BigDecimal price = i.getProduct().getPrice() == null ? BigDecimal.ZERO : i.getProduct().getPrice();
-                    return price.multiply(BigDecimal.valueOf(i.getQuantity()));
-                })
+        List<CartItemResponse> items = cartItems.stream()
+                .map(i -> mapToCartItemResponse(i, user, now))
+                .collect(Collectors.toList());
+
+        BigDecimal total = items.stream()
+                .map(i -> i.getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return CartResponse.builder()
@@ -276,4 +288,3 @@ public class CartServiceImpl implements CartService {
                 .build();
     }
 }
-

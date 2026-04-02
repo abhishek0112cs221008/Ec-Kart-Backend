@@ -33,6 +33,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductRepository productRepository;
     private final CartService cartService;
     private final UsersRepo usersRepo;
+    private final com.ecommerce.ecommercebackend.ai.repository.NegotiatedOfferRepository negotiatedOfferRepository;
 
 
     /**
@@ -75,14 +76,16 @@ public class OrderServiceImpl implements OrderService {
             p.setStock(p.getStock() - ci.getQuantity());
             productRepository.save(p);
 
-            BigDecimal subtotal = p.getPrice().multiply(BigDecimal.valueOf(ci.getQuantity()));
+            // Use the price from the cart (which includes negotiated offers)
+            BigDecimal effectivePrice = ci.getPrice();
+            BigDecimal subtotal = effectivePrice.multiply(BigDecimal.valueOf(ci.getQuantity()));
             total = total.add(subtotal);
 
             OrderItem item = OrderItem.builder()
                     .order(order)
                     .product(p)
                     .quantity(ci.getQuantity())
-                    .priceAtPurchase(p.getPrice())
+                    .priceAtPurchase(effectivePrice)
                     .build();
 
             order.getItems().add(item);
@@ -128,6 +131,15 @@ public class OrderServiceImpl implements OrderService {
         product.setStock(product.getStock() - quantity);
         productRepository.save(product);
 
+        // Check for active negotiated offer for direct order as well
+        BigDecimal effectivePrice = product.getPrice();
+        java.util.Optional<com.ecommerce.ecommercebackend.ai.entity.NegotiatedOffer> offer = 
+            negotiatedOfferRepository.findByUserAndProductAndExpiryDateAfter(user, product, java.time.LocalDateTime.now());
+        
+        if (offer.isPresent()) {
+            effectivePrice = offer.get().getNegotiatedPrice();
+        }
+
         Order order = Order.builder()
                 .user(user)
                 .shippingAddress(shippingAddress)
@@ -138,13 +150,13 @@ public class OrderServiceImpl implements OrderService {
                 .order(order)
                 .product(product)
                 .quantity(quantity)
-                .priceAtPurchase(product.getPrice())
+                .priceAtPurchase(effectivePrice)
                 .build();
 
         order.getItems().add(item);
 
         order.setTotalAmount(
-                product.getPrice().multiply(BigDecimal.valueOf(quantity))
+                effectivePrice.multiply(BigDecimal.valueOf(quantity))
         );
 
         return orderRepository.save(order);

@@ -33,6 +33,9 @@ public class Product {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    @Column(precision = 10, scale = 2)
+    private BigDecimal floorPrice;
+
     @Column(nullable = false)
     private Integer stock; // quantity available
 
