@@ -22,6 +22,14 @@ public class SellerProfile {
 
     private String storeName;
 
+    private String bio;
+
+    private String contactEmail;
+
+    private String contactPhone;
+
+    private String logoUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

@@ -2,12 +2,22 @@ package com.ecommerce.ecommercebackend.seller.service.Impl;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import com.ecommerce.ecommercebackend.Order.entity.OrderItem;
+import com.ecommerce.ecommercebackend.Order.entity.Order;
+import com.ecommerce.ecommercebackend.Order.entity.OrderStatus;
+import com.ecommerce.ecommercebackend.Order.repository.OrderItemRepository;
+import com.ecommerce.ecommercebackend.Order.repository.OrderRepository;
+import com.ecommerce.ecommercebackend.Product.repository.ProductRepository;
 import com.ecommerce.ecommercebackend.auth.dto.Responses.MessageResponse;
 import com.ecommerce.ecommercebackend.auth.exception.UserNotFoundException;
 import com.ecommerce.ecommercebackend.entity.Role;
 import com.ecommerce.ecommercebackend.entity.Users;
 import com.ecommerce.ecommercebackend.exception.ResourceNotFoundException;
 import com.ecommerce.ecommercebackend.repository.UsersRepo;
+import com.ecommerce.ecommercebackend.seller.dto.SellerDashboardStatsDTO;
+import com.ecommerce.ecommercebackend.seller.dto.SellerOrderResponse;
+import com.ecommerce.ecommercebackend.seller.dto.SellerProfileResponseDTO;
+import com.ecommerce.ecommercebackend.seller.dto.SellerProfileUpdateDTO;
 import com.ecommerce.ecommercebackend.seller.dto.SellerRequestResponse;
 import com.ecommerce.ecommercebackend.seller.entity.SellerProfile;
 import com.ecommerce.ecommercebackend.seller.entity.SellerRequest;
@@ -23,11 +33,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * SellerService implementation.
@@ -45,6 +57,9 @@ public class SellerServiceImpl implements SellerService {
     private final SellerProfileRepo sellerProfileRepo;
     private final Cloudinary cloudinary;
     private final EmailService emailService;
+    private final OrderItemRepository orderItemRepository;
+    private final OrderRepository orderRepository;
+    private final ProductRepository productRepository;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -225,9 +240,120 @@ public class SellerServiceImpl implements SellerService {
         // Convert to DTOs
         return pendingRequests.stream()
                 .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public SellerDashboardStatsDTO getSellerDashboardStats(String email) {
+        BigDecimal revenue = orderItemRepository.calculateTotalRevenueBySellerEmail(email);
+        long totalOrders = orderItemRepository.countOrdersBySellerEmail(email);
+        long activeProducts = productRepository.countBySellerEmailAndActiveTrue(email);
+
+        List<OrderItem> items = orderItemRepository.findAllBySellerEmail(email);
+        
+        // Null-safe status grouping
+        Map<String, Long> statusCounts = items.stream()
+                .filter(oi -> oi.getOrder() != null && oi.getOrder().getStatus() != null)
+                .collect(java.util.stream.Collectors.groupingBy(
+                        oi -> oi.getOrder().getStatus().name(),
+                        java.util.stream.Collectors.counting()
+                ));
+
+        return SellerDashboardStatsDTO.builder()
+                .totalRevenue(revenue != null ? revenue : BigDecimal.ZERO)
+                .totalOrders(totalOrders)
+                .activeProducts(activeProducts)
+                .ordersByStatus(statusCounts)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public List<SellerOrderResponse> getSellerOrders(String email) {
+        List<OrderItem> items = orderItemRepository.findAllBySellerEmail(email);
+        return items.stream()
+                .map(this::toOrderResponse)
                 .toList();
     }
-    /* ========================= Helper ========================= */
+
+    @Override
+    @Transactional
+    public MessageResponse updateOrderStatus(Long orderId, OrderStatus status, String sellerEmail) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+
+        // Verify that this seller owns at least one item in this order
+        boolean ownsItem = order.getItems().stream()
+                .anyMatch(oi -> oi.getProduct().getSeller().getEmail().equalsIgnoreCase(sellerEmail));
+
+        if (!ownsItem) {
+            throw new SellerRequestException("You are not authorized to update this order");
+        }
+
+        order.setStatus(status);
+        order.setUpdatedAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        return new MessageResponse("Order status updated to " + status);
+    }
+
+    @Override
+    public SellerProfileResponseDTO getSellerProfile(String email) {
+        Users user = usersRepo.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + email));
+
+        SellerProfile profile = sellerProfileRepo.findByUser(user)
+                .orElseThrow(() -> new ResourceNotFoundException("SellerProfile", "user_id", user.getId()));
+
+        return SellerProfileResponseDTO.builder()
+                .id(profile.getId())
+                .storeName(profile.getStoreName())
+                .bio(profile.getBio())
+                .contactEmail(profile.getContactEmail())
+                .contactPhone(profile.getContactPhone())
+                .logoUrl(profile.getLogoUrl())
+                .createdAt(profile.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public MessageResponse updateSellerProfile(String email, SellerProfileUpdateDTO updateDTO) {
+        Users user = usersRepo.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + email));
+
+        SellerProfile profile = sellerProfileRepo.findByUser(user)
+                .orElseThrow(() -> new ResourceNotFoundException("SellerProfile", "user_id", user.getId()));
+
+        profile.setStoreName(updateDTO.getStoreName());
+        profile.setBio(updateDTO.getBio());
+        profile.setContactEmail(updateDTO.getContactEmail());
+        profile.setContactPhone(updateDTO.getContactPhone());
+
+        sellerProfileRepo.save(profile);
+
+        return new MessageResponse("Seller profile updated successfully");
+    }
+
+
+    /* ========================= Helpers ========================= */
+
+    private SellerOrderResponse toOrderResponse(OrderItem oi) {
+        BigDecimal unitPrice = oi.getPriceAtPurchase() != null ? oi.getPriceAtPurchase() : oi.getProduct().getPrice();
+        if (unitPrice == null) unitPrice = BigDecimal.ZERO;
+
+        return SellerOrderResponse.builder()
+                .orderId(oi.getOrder().getId())
+                .productTitle(oi.getProduct().getName())
+                .customerName(oi.getOrder().getUser().getFirstName() + " " + oi.getOrder().getUser().getLastName())
+                .shippingAddress(oi.getOrder().getShippingAddress())
+                .quantity(oi.getQuantity())
+                .price(unitPrice.multiply(BigDecimal.valueOf(oi.getQuantity())))
+                .status(oi.getOrder().getStatus())
+                .createdAt(oi.getOrder().getCreatedAt())
+                .build();
+    }
 
 
     private SellerRequestResponse toDto(SellerRequest r) {

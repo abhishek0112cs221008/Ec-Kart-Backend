@@ -17,12 +17,12 @@ public interface ProductService {
 
     ProductResponse getProductById(UUID id);
 
+    ProductResponse updateProduct(UUID id, ProductRequest request, MultipartFile file, String sellerEmail) throws IOException;
+
+    MessageResponse deleteProduct(UUID id, String sellerEmail);
+
     List<ProductResponse> getAllProducts();
 
     List<ProductResponse> getMyProducts(String sellerEmail);
-
-    ProductResponse updateProduct(UUID id, ProductRequest request , MultipartFile file , String sellerEmail) throws IOException;
-
-    MessageResponse deleteProduct(UUID id , String sellerEmail);
 }
 

@@ -50,11 +50,16 @@ public class ProductController {
             @RequestParam String name,
             @RequestParam String description,
             @RequestParam Double price,
+            @RequestParam(required = false) Double floorPrice,
             @RequestParam Long categoryId,
             @RequestParam Integer stock,
+            @RequestParam(required = false) String targetGroup,
             @RequestPart(value = "file", required = false) MultipartFile file) throws IOException {
 
-        ProductRequest request = new ProductRequest(name, description, price, categoryId, stock);
+        ProductRequest request = ProductRequest.builder()
+                .name(name).description(description).price(price)
+                .floorPrice(floorPrice).categoryId(categoryId)
+                .stock(stock).targetGroup(targetGroup).build();
         String sellerEmail = authentication.getName();
         ProductResponse resp = productService.createProduct(request, file, sellerEmail);
         return ResponseEntity.status(HttpStatus.CREATED).body(resp);
@@ -120,12 +125,17 @@ public class ProductController {
             Authentication authentication,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String description,
-            @RequestParam(required = false) Double price,           // optional now
+            @RequestParam(required = false) Double price,
+            @RequestParam(required = false) Double floorPrice,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Integer stock,
+            @RequestParam(required = false) String targetGroup,
             @RequestPart(value = "file", required = false) MultipartFile file) throws IOException {
 
-        ProductRequest request = new ProductRequest(name, description, price, categoryId, stock);
+        ProductRequest request = ProductRequest.builder()
+                .name(name).description(description).price(price)
+                .floorPrice(floorPrice).categoryId(categoryId)
+                .stock(stock).targetGroup(targetGroup).build();
         String sellerEmail = authentication.getName();
         ProductResponse resp = productService.updateProduct(id, request, file, sellerEmail);
         return ResponseEntity.ok(resp);

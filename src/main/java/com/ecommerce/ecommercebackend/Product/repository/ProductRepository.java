@@ -18,4 +18,5 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     // fetch all products belonging to a seller by their email
     List<Product> findBySellerEmail(String email);
 
+    long countBySellerEmailAndActiveTrue(String email);
 }

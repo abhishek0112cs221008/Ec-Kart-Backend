@@ -11,17 +11,17 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.ecommerce.ecommercebackend.seller.dto.SellerDashboardStatsDTO;
+import com.ecommerce.ecommercebackend.seller.dto.SellerOrderResponse;
+import com.ecommerce.ecommercebackend.Order.entity.OrderStatus;
+
 import java.io.IOException;
 import java.util.List;
+import com.ecommerce.ecommercebackend.seller.dto.SellerProfileResponseDTO;
+import com.ecommerce.ecommercebackend.seller.dto.SellerProfileUpdateDTO;
 
 /**
- * Controller for seller onboarding and admin review endpoints.
- *
- * Endpoints allow authenticated users to submit a request to become a seller
- * (uploading verification documents), and allow admins to list, approve,
- * or reject those requests. The authenticated user's email is always taken
- * from the Spring Security {@link org.springframework.security.core.Authentication}
- * principal.
+ * Controller for seller onboarding and dashboard metrics.
  */
 
 @SuppressWarnings("ALL")
@@ -31,6 +31,60 @@ import java.util.List;
 public class SellerController {
 
     private final SellerService sellerService;
+
+    /**
+     * Dashboard stats for the authenticated seller.
+     */
+    @GetMapping("/dashboard/stats")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<SellerDashboardStatsDTO> getDashboardStats(Authentication authentication) {
+        return ResponseEntity.ok(sellerService.getSellerDashboardStats(authentication.getName()));
+    }
+
+    /**
+     * List of all orders for the authenticated seller.
+     */
+    @GetMapping("/dashboard/orders")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<List<SellerOrderResponse>> getSellerOrders(Authentication authentication) {
+        return ResponseEntity.ok(sellerService.getSellerOrders(authentication.getName()));
+    }
+
+    /**
+     * Get the authenticated seller's profile.
+     */
+    @GetMapping("/profile")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<SellerProfileResponseDTO> getSellerProfile(Authentication authentication) {
+        return ResponseEntity.ok(sellerService.getSellerProfile(authentication.getName()));
+    }
+
+    /**
+     * Update the authenticated seller's profile.
+     */
+    @PutMapping("/profile")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<MessageResponse> updateSellerProfile(
+            @RequestBody SellerProfileUpdateDTO updateDTO,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(sellerService.updateSellerProfile(authentication.getName(), updateDTO));
+    }
+
+
+    /**
+     * Update the status of an order (SELLER only).
+     */
+    @PatchMapping("/orders/{orderId}/status")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<MessageResponse> updateOrderStatus(
+            @PathVariable Long orderId,
+            @RequestParam OrderStatus status,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(sellerService.updateOrderStatus(orderId, status, authentication.getName()));
+    }
+
 
     /**
      * Submit a request to become a seller.

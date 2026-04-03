@@ -36,6 +36,9 @@ public class Product {
     @Column(precision = 10, scale = 2)
     private BigDecimal floorPrice;
 
+    @Column(name = "target_group")
+    private String targetGroup; // man, women, boys, girl, kids, unisex, all
+
     @Column(nullable = false)
     private Integer stock; // quantity available
 

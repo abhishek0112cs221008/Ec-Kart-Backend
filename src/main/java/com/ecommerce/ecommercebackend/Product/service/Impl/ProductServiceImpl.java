@@ -81,10 +81,12 @@ public class ProductServiceImpl implements ProductService {
                 .name(name)
                 .description(request.getDescription())
                 .price(BigDecimal.valueOf(request.getPrice()))
+                .floorPrice(request.getFloorPrice() != null ? BigDecimal.valueOf(request.getFloorPrice()) : null)
                 .stock(request.getStock())
                 .category(category)
-                .seller(seller)  // set owner
-                .active(true)    // active by default
+                .seller(seller)
+                .active(true)
+                .targetGroup(request.getTargetGroup())
                 .build();
 
         // Upload Product image to Cloudinary
@@ -229,6 +231,19 @@ public class ProductServiceImpl implements ProductService {
             product.setCategory(category);
         }
 
+        // update floorPrice if provided
+        if (request.getFloorPrice() != null) {
+            if (request.getFloorPrice() < 0) {
+                throw new InvalidProductException("Floor price cannot be negative");
+            }
+            product.setFloorPrice(BigDecimal.valueOf(request.getFloorPrice()));
+        }
+
+        // update targetGroup if provided
+        if (request.getTargetGroup() != null && !request.getTargetGroup().trim().isEmpty()) {
+            product.setTargetGroup(request.getTargetGroup().trim());
+        }
+
         // update image if provided
         if (file != null && !file.isEmpty()) {
             Map<String, Object> uploadResult = cloudinary.uploader().upload(file.getBytes(),
@@ -249,18 +264,15 @@ public class ProductServiceImpl implements ProductService {
 
 
 
+
+
     /**
-     * Delete a product by UUID.
+     * Soft delete a product by UUID.
      *
      * Only allowed for the product owner or admin.
-     *
-     * @param id the UUID of the product
-     * @param sellerEmail the email of the authenticated user
-     * @return MessageResponse confirming deletion
-     * @throws ProductOwnershipException if user is not owner/admin
-     * @throws ProductNotFoundException if product does not exist
      */
     @Override
+    @Transactional
     public MessageResponse deleteProduct(UUID id , String sellerEmail)  {
         Product product = repo.findById(id)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found with id : " + id));
@@ -268,8 +280,11 @@ public class ProductServiceImpl implements ProductService {
         if (!product.getSeller().getEmail().equalsIgnoreCase(sellerEmail) && !isCurrentUserAdmin()) {
             throw new ProductOwnershipException("You are not allowed to delete this product");
         }
-        repo.deleteById(id);
-        return new MessageResponse("Product deleted successfully");
+        
+        product.setActive(false);
+        repo.save(product);
+        
+        return new MessageResponse("Product hidden/deleted successfully");
     }
 
 
@@ -301,6 +316,8 @@ public class ProductServiceImpl implements ProductService {
                 .averageRating(reviewService.getAverageRating(p.getId()))
                 .reviewCount(reviewService.getReviewCount(p.getId()))
                 .sellerRating(reviewService.getSellerAverageRating(p.getSeller().getId()))
+                .floorPrice(p.getFloorPrice())
+                .targetGroup(p.getTargetGroup())
                 .build();
     }
 

@@ -26,7 +26,7 @@ public class ProductResponse {
     private Double averageRating;
     private Long reviewCount;
     private Double sellerRating;
-
-
+    private BigDecimal floorPrice;
+    private String targetGroup;
 }
 
