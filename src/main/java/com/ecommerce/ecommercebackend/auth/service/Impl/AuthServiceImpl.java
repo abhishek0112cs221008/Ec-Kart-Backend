@@ -66,6 +66,9 @@ public class AuthServiceImpl implements AuthService {
     private final OTPRepository otpRepository;
     private final PasswordResetAttemptRepository attemptRepo;
     private final SellerRequestRepo sellerRequestRepo;
+    
+    @org.springframework.beans.factory.annotation.Value("${app.backend-url}")
+    private String backendUrl;
 
 
 
@@ -145,7 +148,7 @@ public class AuthServiceImpl implements AuthService {
 
 
     // send verification email (change the URL depending on your deployment(frontend(3000) or backend(8080)) )
-    String verificationLink = "http://localhost:8080/api/v1/auth/verify-email?token=" + token;
+    String verificationLink = backendUrl + "/api/v1/auth/verify-email?token=" + token;
     String body = "Hello " + user.getFirstName() + ",\n\n" +
             "Click the link to verify your account:\n" + verificationLink +
             "\n\nIf you did not register, ignore this email.";
@@ -473,7 +476,7 @@ public class AuthServiceImpl implements AuthService {
         verificationTokenRepo.save(token);
 
         // Send email with token link
-        String verificationLink = "http://localhost:8080/api/v1/auth/update-email/verify?token=" + token;
+        String verificationLink = backendUrl + "/api/v1/auth/update-email/verify?token=" + token;
         String body = "Hello " + user.getFirstName() + ",\n\n" +
                 "Click the link to verify your account:\n" + verificationLink +
                 "\n\nIf you did not try to change your email , ignore this email.";

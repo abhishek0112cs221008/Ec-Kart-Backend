@@ -35,6 +35,8 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: https://ec-kart.netlify.app/
+      - key: BACKEND_URL
+        sync: false # Set this to your Render service URL (e.g. https://ecommerce-backend.onrender.com)
       - key: JWT_SECRET
         generateValue: true # Render can generate a secure secret for you
 
