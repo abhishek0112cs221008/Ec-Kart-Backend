@@ -48,6 +48,10 @@ public class PaymentServiceImpl implements PaymentService {
             throw new OrderPaymentNotAllowedException("Order does not belong to authenticated user");
         }
 
+        if (razorpayKeyId == null || razorpayKeyId.contains("change_me_in_render") || razorpayKeyId.isEmpty()) {
+            throw new RuntimeException("Razorpay Key ID is not configured. Please set the RAZORPAY_KEY_ID environment variable in Render.");
+        }
+
         try {
             // Amount in paise (multiply by 100)
             BigDecimal amountInPaise = order.getTotalAmount()
