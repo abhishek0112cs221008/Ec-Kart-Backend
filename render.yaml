@@ -1,11 +1,9 @@
 services:
   - type: web
     name: ecommerce-backend
-    env: java
+    runtime: docker
     region: ohio # Change to your preferred region
     plan: free # Use 'free' for free tier or 'starter' for better performance
-    buildCommand: "./mvnw clean install -DskipTests"
-    startCommand: "java -jar target/*.jar"
     envVars:
       - key: PORT
         value: 8080
@@ -39,3 +37,4 @@ services:
         value: https://ec-kart.netlify.app/
       - key: JWT_SECRET
         generateValue: true # Render can generate a secure secret for you
+
