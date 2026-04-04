@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: ecommerce-backend
+    env: java
+    region: ohio # Change to your preferred region
+    plan: free # Use 'free' for free tier or 'starter' for better performance
+    buildCommand: "./mvnw clean install -DskipTests"
+    startCommand: "java -jar target/*.jar"
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: SPRING_DATASOURCE_URL
+        sync: false # Set this in Render dashboard
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SPRING_MAIL_USERNAME
+        sync: false
+      - key: SPRING_MAIL_PASSWORD
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        value: https://ec-kart.netlify.app/
+      - key: JWT_SECRET
+        generateValue: true # Render can generate a secure secret for you

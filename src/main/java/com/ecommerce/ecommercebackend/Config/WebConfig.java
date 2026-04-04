@@ -13,6 +13,9 @@ import java.util.List;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
+    @org.springframework.beans.factory.annotation.Value("${app.base-url}")
+    private String frontendUrl;
+
     /**
      * Global CORS for all MVC endpoints (non-security layer).
      * This handles regular Spring MVC controllers.
@@ -21,6 +24,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
                 .allowedOrigins(
+                        frontendUrl,
                         "http://localhost:5173",  // Vite dev server
                         "http://localhost:3000"   // fallback
                 )
@@ -38,6 +42,7 @@ public class WebConfig implements WebMvcConfigurer {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of(
+                frontendUrl,
                 "http://localhost:5173",  // Vite dev server
                 "http://localhost:3000"   // fallback
         ));
@@ -51,3 +56,4 @@ public class WebConfig implements WebMvcConfigurer {
         return source;
     }
 }
+
