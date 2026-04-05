@@ -35,4 +35,5 @@ build/
 ### Secrets — never commit real credentials ###
 # src/main/resources/application.properties
 src/main/resources/application_copy.properties
+src/main/resources/temp.txt
 

@@ -13,5 +13,6 @@ import com.ecommerce.ecommercebackend.entity.Role;
 public interface UsersRepo extends JpaRepository<Users, UUID> {
     Optional<Users> findByEmail(String email);
     List<Users> findByRoleAndSellerVerifiedFalse(Role role);
+    List<Users> findByEmailVerifiedFalseAndCreatedAtBefore(java.time.LocalDateTime timestamp);
 }
 

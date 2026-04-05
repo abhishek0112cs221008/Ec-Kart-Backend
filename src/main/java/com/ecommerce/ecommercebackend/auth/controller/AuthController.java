@@ -77,6 +77,18 @@ public class AuthController {
         return ResponseEntity.ok(resp);
     }
 
+    /**
+     * Resend verification email to a user.
+     *
+     * @param email the user's email address
+     * @return a message response indicating whether the email was resent
+     */
+    @PostMapping("/resend-verification")
+    public ResponseEntity<MessageResponse> resendVerificationEmail(@RequestParam("email") @NotBlank String email) {
+        MessageResponse resp = authService.resendVerificationEmail(email);
+        return ResponseEntity.ok(resp);
+    }
+
 
     /**
      * Authenticate a user (login).

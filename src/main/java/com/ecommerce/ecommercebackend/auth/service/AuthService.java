@@ -38,6 +38,8 @@ public interface AuthService {
     MessageResponse updatePassword(UpdatePasswordRequest request, String currentUserEmail);
 
     MessageResponse verifyEmail(String token);
+    
+    MessageResponse resendVerificationEmail(String email);
 
     //dev only for testing
     List<Users> getAllUsers();

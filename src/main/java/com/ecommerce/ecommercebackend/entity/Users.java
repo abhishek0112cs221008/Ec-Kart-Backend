@@ -65,6 +65,9 @@ public class Users implements UserDetails {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "last_verification_sent_at")
+    private LocalDateTime lastVerificationSentAt;
+
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
