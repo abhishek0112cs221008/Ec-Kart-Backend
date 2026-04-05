@@ -12,6 +12,7 @@ import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.*;
@@ -235,6 +236,18 @@ public class GlobalExceptionHandler {
                 "error", "Forbidden"
         );
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+    
+    // Handle concurrency issues (Optimistic Locking)
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, Object>> handleOptimisticLocking(ObjectOptimisticLockingFailureException ex) {
+        Map<String, Object> body = Map.of(
+                "status", 409,
+                "timestamp", LocalDateTime.now(),
+                "message", "The product stock was updated by another transaction. Please refresh and try again.",
+                "error", "Conflict (Optimistic Lock Failure)"
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
 

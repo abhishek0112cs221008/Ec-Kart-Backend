@@ -49,6 +49,7 @@ public class Product {
     // image URL (Cloudinary)
     private String imageUrl;
 
+    @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
 
@@ -60,6 +61,9 @@ public class Product {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @Version
+    private Long version;
 
     @UpdateTimestamp
     @Column(name = "updated_at")
