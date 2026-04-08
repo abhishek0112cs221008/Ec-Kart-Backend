@@ -3,6 +3,7 @@ package com.ecommerce.ecommercebackend.Product.controller;
 import com.ecommerce.ecommercebackend.Product.dto.ProductRequest;
 import com.ecommerce.ecommercebackend.Product.dto.ProductResponse;
 import com.ecommerce.ecommercebackend.Product.service.ProductService;
+import com.ecommerce.ecommercebackend.Product.service.ProductSearchService;
 import com.ecommerce.ecommercebackend.auth.dto.Responses.MessageResponse;
 import lombok.*;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ import java.util.UUID;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductSearchService productSearchService;
 
 
     /**
@@ -160,6 +162,147 @@ public class ProductController {
         String sellerEmail = authentication.getName();
         MessageResponse resp = productService.deleteProduct(id, sellerEmail);
         return ResponseEntity.ok(resp);
+    }
+
+    // ============================================
+    // ELASTICSEARCH SEARCH ENDPOINTS
+    // ============================================
+
+    /**
+     * Search products by name.
+     *
+     * @param name the product name to search for
+     * @return list of matching ProductResponse objects
+     */
+    @GetMapping("/search/name")
+    public ResponseEntity<List<ProductResponse>> searchByName(
+            @RequestParam(required = false) String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<ProductResponse> results = productSearchService.searchByName(name);
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Search products by name and/or description.
+     *
+     * @param query the search query
+     * @return list of matching ProductResponse objects
+     */
+    @GetMapping("/search/query")
+    public ResponseEntity<List<ProductResponse>> searchByQuery(
+            @RequestParam(required = false) String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<ProductResponse> results = productSearchService.searchByNameOrDescription(query);
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Search products by category.
+     *
+     * @param categoryId the category ID
+     * @return list of products in the specified category
+     */
+    @GetMapping("/search/category/{categoryId}")
+    public ResponseEntity<List<ProductResponse>> searchByCategory(
+            @PathVariable Long categoryId) {
+        List<ProductResponse> results = productSearchService.searchByCategory(categoryId);
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Search products by price range.
+     *
+     * @param minPrice minimum price
+     * @param maxPrice maximum price
+     * @return list of products within the price range
+     */
+    @GetMapping("/search/price")
+    public ResponseEntity<List<ProductResponse>> searchByPriceRange(
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice) {
+        List<ProductResponse> results = productSearchService.searchByPriceRange(
+                minPrice != null ? minPrice : 0.0,
+                maxPrice != null ? maxPrice : Double.MAX_VALUE
+        );
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Search products by target group.
+     *
+     * @param targetGroup the target group (e.g., men, women, kids, unisex)
+     * @return list of products for the specified target group
+     */
+    @GetMapping("/search/target-group")
+    public ResponseEntity<List<ProductResponse>> searchByTargetGroup(
+            @RequestParam(required = false) String targetGroup) {
+        if (targetGroup == null || targetGroup.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<ProductResponse> results = productSearchService.searchByTargetGroup(targetGroup);
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Search products by minimum rating.
+     *
+     * @param minRating minimum average rating
+     * @return list of products with rating >= minRating
+     */
+    @GetMapping("/search/rating")
+    public ResponseEntity<List<ProductResponse>> searchByMinRating(
+            @RequestParam(required = false) Float minRating) {
+        if (minRating == null || minRating < 0 || minRating > 5) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<ProductResponse> results = productSearchService.searchByMinRating(minRating);
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Advanced search with multiple filters.
+     *
+     * @param query search query
+     * @param categoryId category ID (optional)
+     * @param minPrice minimum price (optional)
+     * @param maxPrice maximum price (optional)
+     * @param targetGroup target group (optional)
+     * @return list of products matching all filters
+     */
+    @GetMapping("/search/advanced")
+    public ResponseEntity<List<ProductResponse>> advancedSearch(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false) String targetGroup) {
+        List<ProductResponse> results = productSearchService.advancedSearch(
+                query, categoryId, minPrice, maxPrice, targetGroup
+        );
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Reindex all products from database to Elasticsearch.
+     *
+     * Only accessible by ADMIN role.
+     *
+     * @return MessageResponse indicating reindexing status
+     */
+    @PostMapping("/admin/reindex")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<MessageResponse> reindexAllProducts() {
+        try {
+            productSearchService.reindexAllProducts();
+            return ResponseEntity.ok(new MessageResponse("Reindexing started successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Error during reindexing: " + e.getMessage()));
+        }
     }
 }
 

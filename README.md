@@ -12,7 +12,7 @@ A robust, enterprise-ready Spring Boot backend for the Ec-Kart e-commerce platfo
 ## 🛠️ Technology Stack
 - **Language**: Java 21+
 - **Framework**: Spring Boot 4.0.5
-- **Database**: MySQL 8.0+
+- **Database**: PostgreSQL 15+
 - **Persistence**: Spring Data JPA / Hibernate
 - **Security**: Spring Security & JJWT
 - **Payment Gateway**: Stripe Java SDK
@@ -21,24 +21,26 @@ A robust, enterprise-ready Spring Boot backend for the Ec-Kart e-commerce platfo
 
 ## 📋 Prerequisites
 - **JDK 21** or later
-- **MySQL Server**
+- **PostgreSQL Server**
 - **Maven**
 - Accounts for **Stripe** and **Cloudinary** (for API keys)
 
 ## ⚙️ Setup & Installation
 
 1. **Clone the repository**
-2. **Configure Environment**: Update `src/main/resources/application.properties` with your credentials:
+2. **Configure Environment**: Create a `.env` file in the backend directory or export env vars:
    ```properties
-   spring.datasource.url=jdbc:mysql://localhost:3306/ecommerce_db
-   spring.datasource.username=YOUR_USERNAME
-   spring.datasource.password=YOUR_PASSWORD
+   SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/ecommerce_db?prepareThreshold=0
+   SPRING_DATASOURCE_USERNAME=postgres
+   SPRING_DATASOURCE_PASSWORD=postgres123
    
-   stripe.api.key=YOUR_STRIPE_SECRET_KEY
+   RAZORPAY_KEY_ID=YOUR_RAZORPAY_KEY_ID
+   RAZORPAY_KEY_SECRET=YOUR_RAZORPAY_KEY_SECRET
    cloudinary.cloud_name=YOUR_CLOUD_NAME
    cloudinary.api_key=YOUR_API_KEY
    cloudinary.api_secret=YOUR_API_SECRET
    ```
+   You can also start the local dependencies with `docker-compose up -d postgres elasticsearch`.
 3. **Run the application**:
    ```bash
    ./mvnw spring-boot:run

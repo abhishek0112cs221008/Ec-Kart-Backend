@@ -11,6 +11,7 @@ import com.ecommerce.ecommercebackend.Product.dto.ProductResponse;
 import com.ecommerce.ecommercebackend.Product.entity.Product;
 import com.ecommerce.ecommercebackend.Product.exception.*;
 import com.ecommerce.ecommercebackend.Product.repository.ProductRepository;
+import com.ecommerce.ecommercebackend.Product.service.ProductSearchService;
 import com.ecommerce.ecommercebackend.Product.service.ProductService;
 import com.ecommerce.ecommercebackend.auth.dto.Responses.MessageResponse;
 import com.ecommerce.ecommercebackend.entity.Users;
@@ -42,6 +43,7 @@ public class ProductServiceImpl implements ProductService {
      private final Cloudinary cloudinary;
      private final UsersRepo usersRepository;
      private final com.ecommerce.ecommercebackend.Review.service.ReviewService reviewService;
+     private final ProductSearchService productSearchService;
 
 
 
@@ -103,7 +105,17 @@ public class ProductServiceImpl implements ProductService {
             product.setImageUrl(imageUrl);
         }
         repo.save(product);
-        return mapToResponse(product, "Product created successfully :<>:");
+        
+        // Index product in Elasticsearch
+        ProductResponse response = mapToResponse(product, "Product created successfully :<>:");
+        try {
+            productSearchService.indexProduct(response);
+        } catch (Exception e) {
+            // Log error but don't fail the product creation
+            System.out.println("Error indexing product: " + e.getMessage());
+        }
+        
+        return response;
     }
 
 
@@ -259,7 +271,17 @@ public class ProductServiceImpl implements ProductService {
         }
 
         repo.save(product); // persist changes
-        return mapToResponse(product, "Product updated successfully");
+        
+        // Index updated product in Elasticsearch
+        ProductResponse response = mapToResponse(product, "Product updated successfully");
+        try {
+            productSearchService.indexProduct(response);
+        } catch (Exception e) {
+            // Log error but don't fail the product update
+            System.out.println("Error reindexing product: " + e.getMessage());
+        }
+        
+        return response;
     }
 
 
@@ -283,6 +305,14 @@ public class ProductServiceImpl implements ProductService {
         
         product.setActive(false);
         repo.save(product);
+        
+        // Remove product from Elasticsearch index
+        try {
+            productSearchService.deleteProductFromIndex(product.getId().toString());
+        } catch (Exception e) {
+            // Log error but don't fail the deletion
+            System.out.println("Error removing product from search index: " + e.getMessage());
+        }
         
         return new MessageResponse("Product hidden/deleted successfully");
     }
@@ -329,4 +359,3 @@ public class ProductServiceImpl implements ProductService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 }
-
