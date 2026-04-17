@@ -31,6 +31,18 @@ public class SecurityConfig {
     private final RestAccessDeniedHandler accessDeniedHandler;
 
     @Bean
+    public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher("/", "/health")
+                .authorizeHttpRequests(auth -> auth
+                        .anyRequest().permitAll()
+                )
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .build();
+    }
+
+    @Bean
     public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
        return http
                 .securityMatcher("/api/**")
